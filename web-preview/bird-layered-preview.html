@@ -1,0 +1,145 @@
+<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>白鳥・分圖層動畫試作</title>
+<style>body{margin:30px auto;max-width:820px;padding:16px;background:#fff8e8;color:#57483a;font:16px sans-serif}canvas{width:100%;background:center/cover url('assets/garden-detailed-day.png');border:3px solid #bbaa95;border-radius:16px}button{padding:10px 14px;margin:6px 4px}label{display:inline-block;margin:6px 8px 6px 0}.row{margin:8px 0}</style>
+<h1>白鳥・分圖層動畫試作</h1>
+<p>Livly 式分圖層：頭、下身、翅膀、尾巴、左右腳六個零件，由程式旋轉／位移。眨眼是程式在眼睛上畫的。只是試作，不影響正式 Web 與存檔。</p>
+<div class="row"><label><input type="checkbox" id="breath" checked>呼吸</label><label><input type="checkbox" id="tail" checked>甩尾</label><label><input type="checkbox" id="head" checked>歪頭</label><label><input type="checkbox" id="blink" checked>眨眼</label><label><input type="checkbox" id="pivots">顯示支點</label><label><input type="checkbox" id="reduced">減少動態</label></div>
+<div class="row"><button id="flap">拍翅膀</button><button id="hop">跳一下</button><button id="walk">踏步：關</button><button id="pause">暫停</button></div>
+<canvas id="scene" width="960" height="640"></canvas>
+<p>零件來源：頭、身體（奶油色胸口＋米色下身）、翅膀由程式從完整圖 <code>layered-test-a-v1.webp</code> 切出，頭依艾瑪畫的線切在胸口上方；尾巴、腳取自 ChatGPT 零件圖 <code>layered-test-b-v1.webp</code>。整理工具 <code>tools/prepare_bird_layered_test.py</code>。</p>
+<script src="assets/pets/bird/layered-test/layout-v1.js"></script>
+<script>
+const L = window.BIRD_LAYERED_LAYOUT, P = L.parts, V = L.pivots;
+const ctx = document.querySelector('#scene').getContext('2d');
+const $ = id => document.getElementById(id);
+const imgs = {};
+for (const name of L.order) { imgs[name] = new Image(); imgs[name].src = `assets/pets/bird/layered-test/${name}.png`; }
+$('reduced').checked = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let t = 0, last = performance.now(), running = true, walking = false, flapAt = -1e9, hopAt = -1e9;
+$('pause').onclick = () => { running = !running; $('pause').textContent = running ? '暫停' : '播放'; };
+$('flap').onclick = () => { flapAt = t; };
+$('hop').onclick = () => { hopAt = t; };
+$('walk').onclick = () => { walking = !walking; $('walk').textContent = walking ? '踏步：開' : '踏步：關'; };
+
+const DEG = Math.PI / 180;
+const smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+// 0 → 1 → 0 pulse: rise over `up` ms, hold, fall over `down` ms, starting at 0 within a cycle.
+function pulse(ms, up, hold, down) {
+  if (ms < 0) return 0;
+  if (ms < up) return smooth(ms / up);
+  if (ms < up + hold) return 1;
+  return 1 - smooth((ms - up - hold) / down);
+}
+
+function pose(time) {
+  const on = id => $(id).checked && !$('reduced').checked;
+  const p = { sx: 1, sy: 1, head: 0, tail: 0, wing: 0, lift: 0, footL: 0, footR: 0, blink: 0 };
+  if (on('breath')) {
+    const b = Math.sin(time / 3200 * 2 * Math.PI);
+    p.sy = 1 + 0.018 * b; p.sx = 1 - 0.006 * b;
+    p.wing = -1.2 * DEG * b;
+  }
+  if (on('tail')) {
+    p.tail = 4 * DEG * Math.sin(time / 1400 * 2 * Math.PI);
+    const c = time % 4300;  // a quick flick up every 4.3 s
+    p.tail -= 14 * DEG * pulse(c - 2000, 120, 60, 260);
+  }
+  if (on('head')) {
+    const n = Math.floor(time / 6000), c = time % 6000;
+    p.head = 1.5 * DEG * Math.sin(time / 2300 * 2 * Math.PI);
+    p.head += (n % 2 ? -1 : 1) * 10 * DEG * pulse(c - 3000, 320, 900, 420);
+  }
+  if (on('blink')) {
+    const n = Math.floor(time / 3700), c = time % 3700;
+    p.blink = Math.max(pulse(c - 1500, 60, 50, 70), n % 3 === 2 ? pulse(c - 1750, 60, 50, 70) : 0);
+  }
+  if (!$('reduced').checked) {
+    const f = time - flapAt;  // three flaps
+    if (f >= 0 && f < 900) p.wing -= 28 * DEG * Math.abs(Math.sin(f / 300 * Math.PI));
+    const h = time - hopAt;  // crouch, jump, land
+    if (h >= 0 && h < 900) {
+      if (h < 160) { const k = Math.sin(h / 160 * Math.PI); p.sy -= 0.07 * k; p.sx += 0.04 * k; }
+      else if (h < 640) {
+        const k = (h - 160) / 480;
+        p.lift = 110 * 4 * k * (1 - k);
+        p.sy += 0.04 * Math.sin(k * Math.PI);
+        p.footL = p.footR = Math.max(0, p.lift - 20 * Math.sin(k * Math.PI));  // feet trail a little
+        p.tail -= 10 * DEG * Math.sin(k * Math.PI);
+        p.wing -= 18 * DEG * Math.sin(k * Math.PI);
+      } else { const k = Math.sin((h - 640) / 260 * Math.PI); p.sy -= 0.05 * k; p.sx += 0.03 * k; }
+    }
+    if (walking) {
+      const w = time / 520 * Math.PI;  // one step per 520 ms, feet alternate
+      p.footL += 22 * Math.max(0, Math.sin(w));
+      p.footR += 22 * Math.max(0, -Math.sin(w));
+      p.lift += 6 * Math.abs(Math.sin(w));
+      p.head += 2 * DEG * Math.sin(w);
+    }
+  }
+  return p;
+}
+
+function draw(name, dx, dy, angle, pivot) {
+  const q = P[name];
+  ctx.save();
+  ctx.translate(dx, dy);
+  if (angle) { ctx.translate(pivot[0], pivot[1]); ctx.rotate(angle); ctx.translate(-pivot[0], -pivot[1]); }
+  ctx.drawImage(imgs[name], q.x, q.y);
+  if (name === 'head') drawBlink(q);
+  ctx.restore();
+}
+
+// Closing eyelids: squash each eye toward its centre, then draw a closed-eye line.
+function drawBlink(q, p = current.blink) {
+  if (p <= 0) return;
+  for (const [ex, ey, rx, ry, ang] of L.eyes) {
+    const cx = q.x + ex, cy = q.y + ey, R = rx + 6;
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx + 4, ry + 4, ang, 0, 2 * Math.PI); ctx.clip();
+    ctx.fillStyle = L.headColour; ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+    const k = 1 - p;
+    if (k > 0.2) ctx.drawImage(imgs.head, ex - R, ey - R, 2 * R, 2 * R, cx - R, cy - R * k, 2 * R, 2 * R * k);
+    ctx.restore();
+    if (k <= 0.2) {
+      const hw = Math.sqrt((rx * Math.cos(ang)) ** 2 + (ry * Math.sin(ang)) ** 2) * 0.9;
+      ctx.save();
+      ctx.strokeStyle = '#5b3426'; ctx.lineWidth = 11; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(cx - hw, cy); ctx.quadraticCurveTo(cx, cy + hw * 0.45, cx + hw, cy); ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+let current = pose(0);
+function frame(now) {
+  if (running && !document.hidden) t += Math.min(100, now - last);
+  last = now;
+  current = pose(t);
+  const p = current, [bx, by] = V.body;
+  // A point on the body moves with the breathing/squash scale around the body's bottom centre.
+  const ride = ([x, y]) => [(x - bx) * (p.sx - 1), (y - by) * (p.sy - 1) - p.lift];
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, 960, 640);
+  const k = 0.42;
+  ctx.setTransform(k, 0, 0, k, 480 - 600 * k, 600 - 1150 * k);
+  for (const name of L.order) {
+    if (name === 'body') {
+      ctx.save();
+      ctx.translate(bx, by - p.lift); ctx.scale(p.sx, p.sy); ctx.translate(-bx, -by);
+      ctx.drawImage(imgs.body, P.body.x, P.body.y);
+      ctx.restore();
+    } else if (name.startsWith('foot')) {
+      draw(name, 0, -(name === 'foot-left' ? p.footL : p.footR), 0);
+    } else {
+      const [dx, dy] = ride(V[name]);
+      draw(name, dx, dy, p[name], V[name]);
+    }
+  }
+  if ($('pivots').checked) {
+    ctx.fillStyle = '#e0306a';
+    for (const [x, y] of Object.values(V)) { ctx.beginPath(); ctx.arc(x, y, 10, 0, 2 * Math.PI); ctx.fill(); }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script></html>

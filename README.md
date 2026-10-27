@@ -1,8 +1,11 @@
 # ESP32 Electronic Pet／神秘蛋電子寵物
 
-**🐣 電子雞網頁：<https://fuling0519.github.io/ESP32-Electronic-Pet/>**　手機或電腦直接開啟，按「搜尋」就能用藍牙連電子雞。Android 用 Chrome（已在 Galaxy A56 上測過）；iPhone 的 Safari 不支援，要用 Bluefy 等支援 Web Bluetooth 的瀏覽器。電子雞一次只能連一台裝置。
+**🐣 電子雞網頁：<https://fuling0519.github.io/My-Electronic-Pet/>**　手機或電腦直接開啟，按「搜尋」就能用藍牙連電子雞。Android 用 Chrome（已在 Galaxy A56 上測過）；iPhone 的 Safari 不支援，要用 Bluefy 等支援 Web Bluetooth 的瀏覽器。電子雞一次只能連一台裝置。
 
 這是以 ESP32 NodeMCU-32S 製作的離線電子寵物。本文件負責環境、建置及操作入口。
+
+> **專案由來**：本 repo 延續自專題 [fuling0519/ESP32-Electronic-Pet](https://github.com/fuling0519/ESP32-Electronic-Pet)，並保留完整提交歷史。專題發表時的版本是原 repo 的 [`v1.0-presentation`](https://github.com/fuling0519/ESP32-Electronic-Pet/tree/v1.0-presentation) 標籤；之後的修改由 fuling0519 個人在這裡繼續，不再改動原 repo。
+> 原專題組員與貢獻：huei20010416-cmd（Web 狀態面板與照顧操作）、llinda820201tw-cmyk（BLE 唯讀 App 串接、白鳥動畫與漸進餵食）、arielxq（Wokwi 模擬設定、BLE 驗證紀錄）、afr6538bear-a11y（README）。
 
 目前正式韌體為 1.8.1；自 1.8.0 起加入第二種寵物「小飛龍」：每顆新蛋小鳥／小飛龍各 50%，種類沿用到成長、睡眠與紀念冊；現有小鳥存檔保留原種類。[小飛龍驗收與固定種類測試版](docs/testing/wyvern-test.md)。
 
@@ -48,8 +51,8 @@ flutter run -d chrome
 ## 新環境建置
 
 1. 安裝 [Visual Studio Code](https://code.visualstudio.com/) 與 [PlatformIO IDE 擴充套件](https://platformio.org/install/ide?install=vscode)。若使用命令列，請確認 `pio` 可在終端機執行（PlatformIO Core 6.2.0 已用於本專案建置）。
-2. 安裝 Git，然後 clone 專案：`git clone https://github.com/fuling0519/ESP32-Electronic-Pet.git`。
-3. 在 VS Code 選擇「開啟資料夾」，開啟 clone 出來的 `ESP32-Electronic-Pet`。PlatformIO 會讀取 `platformio.ini`，在首次 build 時安裝指定的 ESP32 platform、Arduino framework 與 U8g2 library；首次下載需要網路。
+2. 安裝 Git，然後 clone 專案：`git clone https://github.com/fuling0519/My-Electronic-Pet.git`。
+3. 在 VS Code 選擇「開啟資料夾」，開啟 clone 出來的 `My-Electronic-Pet`。PlatformIO 會讀取 `platformio.ini`，在首次 build 時安裝指定的 ESP32 platform、Arduino framework 與 U8g2 library；首次下載需要網路。
 4. 在專案根目錄執行下列指令。接好 NodeMCU-32S 後才執行 upload；如有多個序列埠，先選定正確的埠。
 
 ```text
